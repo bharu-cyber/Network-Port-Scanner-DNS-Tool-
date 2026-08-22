@@ -1,1 +1,922 @@
-v
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Night Tree // Port Scan + DNS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#050810; --ink-2:#0d1420; --paper:#E8F0FA;
+    --teal:#2DD4BF; --blue:#3B82F6; --silver:#94A3B8; --indigo:#818CF8;
+    --border:#1e293b; --muted:#7b8aa3;
+    --pend:#A5F3FC; --open:#22D3EE; --closed:#1E3A5F;
+    --mono:'IBM Plex Mono', monospace; --sans:'Inter', sans-serif;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ background:var(--ink); height:100%; font-family:var(--sans); color:var(--paper); }
+  body{ overflow-y:scroll; overflow-x:hidden; scroll-snap-type:y proximity; }
+  #canvas-wrap{ position:fixed; inset:0; z-index:0; }
+  canvas{ display:block; touch-action:pan-y; }
+
+  .section{ position:relative; z-index:1; min-height:100vh; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; scroll-snap-align:start; padding:20px 20px 28px; text-align:center; pointer-events:none; }
+  .caption-bar{ background:rgba(5,8,16,0.72); border:1px solid var(--border); border-radius:14px; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); padding:14px 18px; max-width:400px; width:100%; }
+  .card{ pointer-events:auto; }
+
+  h1{ font-family:var(--mono); font-weight:700; font-size:clamp(24px, 6vw, 34px); letter-spacing:1px; margin-bottom:6px; color:var(--paper); text-shadow:0 0 18px rgba(45,212,191,0.3); }
+  h1 span{ color:var(--teal); }
+  .tagline{ font-family:var(--mono); font-size:10.5px; color:var(--teal); letter-spacing:2px; text-transform:uppercase; margin-bottom:10px; opacity:0.9; }
+  .body-text{ max-width:400px; color:var(--muted); font-size:12.5px; line-height:1.55; margin-bottom:8px; }
+
+  .card{ background:rgba(13,20,32,0.65); border:1px solid var(--border); border-radius:14px; padding:22px; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); width:100%; max-width:340px; }
+  .card label{ display:block; font-family:var(--mono); font-size:11px; color:var(--teal); text-align:left; margin-bottom:5px; letter-spacing:1px; }
+  .card input{ width:100%; background:var(--ink); border:1px solid var(--border); border-radius:7px; padding:11px 12px; color:var(--paper); font-family:var(--mono); font-size:14px; margin-bottom:12px; }
+  .card input:focus{ outline:2px solid var(--teal); border-color:transparent; }
+  .row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .btn{ width:100%; font-family:var(--mono); font-weight:700; font-size:13.5px; background:linear-gradient(90deg, var(--blue), var(--teal)); color:#031014; border:none; border-radius:8px; padding:13px; cursor:pointer; margin-top:4px; box-shadow:0 6px 24px rgba(45,212,191,0.3); }
+  .btn:active{ transform:scale(0.97); }
+
+  .scroll-hint{ margin-top:24px; font-family:var(--mono); font-size:11px; color:var(--muted); display:flex; flex-direction:column; align-items:center; gap:6px; animation:bob 1.8s ease-in-out infinite; }
+  .scroll-hint .arrow{ font-size:15px; color:var(--teal); }
+  @keyframes bob{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(6px); } }
+
+  .sec-eyebrow{ font-family:var(--mono); font-size:10px; color:var(--teal); letter-spacing:2px; text-transform:uppercase; margin-bottom:6px; }
+  .sec-heading{ font-family:var(--mono); font-size:clamp(17px,4vw,22px); font-weight:700; margin:0 0 8px; }
+  .sec-heading em{ font-style:normal; color:var(--indigo); }
+
+  .hud{ position:absolute; top:20px; left:20px; z-index:10; text-align:left; max-width:230px; background:rgba(5,8,16,0.6); border:1px solid var(--border); border-radius:10px; padding:12px 14px; backdrop-filter:blur(8px); opacity:0; transition:opacity .3s linear; pointer-events:none; }
+  .hud h2{ font-family:var(--mono); font-size:13px; color:var(--teal); margin:0 0 4px; }
+  .hud p{ font-family:var(--mono); font-size:10.5px; color:var(--muted); margin:0; line-height:1.5; }
+
+  .status{ position:absolute; top:20px; right:20px; z-index:10; text-align:right; color:var(--teal); font-size:12px; font-family:var(--mono); background:rgba(5,8,16,0.6); border:1px solid var(--border); border-radius:10px; padding:12px 16px; min-width:150px; backdrop-filter:blur(8px); opacity:0; transition:opacity .3s linear; pointer-events:none; }
+  .status .big{ color:var(--indigo); font-size:20px; font-weight:700; }
+  .status .row{ display:flex; justify-content:space-between; gap:12px; font-size:11px; margin-top:5px; color:var(--muted); }
+  .status .row b{ color:var(--paper); font-weight:500; }
+
+  .legend{ position:absolute; bottom:20px; left:20px; z-index:10; display:flex; flex-wrap:wrap; gap:10px; max-width:280px; font-size:10.5px; font-family:var(--mono); color:var(--paper); background:rgba(5,8,16,0.6); border:1px solid var(--border); border-radius:8px; padding:8px 12px; backdrop-filter:blur(8px); opacity:0; transition:opacity .3s linear; pointer-events:none; }
+  .legend span{ display:inline-flex; align-items:center; gap:5px; }
+  .dot{ width:8px; height:8px; border-radius:50%; display:inline-block; box-shadow:0 0 8px currentColor; }
+
+  #fruitInfo{ position:fixed; left:50%; bottom:60px; transform:translateX(-50%); z-index:30; padding:18px 24px; text-align:center; min-width:220px; background:rgba(5,8,16,0.82); border:1px solid var(--border); border-radius:14px; backdrop-filter:blur(10px); opacity:0; pointer-events:none; transition:opacity 0.25s ease; }
+  #fruitInfo.show{ opacity:1; pointer-events:auto; }
+  #fruitInfo .port-num{ font-family:var(--mono); font-size:26px; font-weight:700; }
+  #fruitInfo .port-name{ font-family:var(--mono); font-size:12px; color:var(--muted); margin-top:2px; }
+  #fruitInfo .port-desc{ font-family:var(--mono); font-size:11px; color:var(--silver); margin-top:8px; max-width:260px; line-height:1.5; }
+  #fruitInfo .port-status{ font-family:var(--mono); font-size:13px; font-weight:700; margin-top:8px; letter-spacing:1px; }
+  #backBtn{ margin-top:14px; font-family:var(--mono); font-size:12px; font-weight:600; background:transparent; color:var(--paper); border:1px solid var(--border); border-radius:6px; padding:8px 16px; cursor:pointer; }
+
+  .stat-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; width:100%; max-width:340px; margin:18px 0; }
+  .stat{ background:rgba(13,20,32,0.6); border:1px solid var(--border); border-radius:10px; padding:16px; text-align:left; }
+  .stat .num{ font-family:var(--mono); font-size:24px; font-weight:700; color:var(--teal); }
+  .stat .lbl{ font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin-top:2px; }
+  .chip-list{ width:100%; max-width:340px; text-align:left; }
+  .chip-list h3{ font-family:var(--mono); font-size:11px; color:var(--teal); letter-spacing:1px; text-transform:uppercase; margin-bottom:8px; }
+  .chip{ display:inline-block; font-family:var(--mono); font-size:12px; color:#031014; background:var(--open); border-radius:20px; padding:4px 11px; margin:0 6px 6px 0; font-weight:700; }
+  .rec-row{ font-family:var(--mono); font-size:12px; margin-bottom:8px; text-align:left; }
+  .rec-row .rt{ font-weight:700; margin-bottom:2px; }
+  .rec-row .rv{ color:var(--muted); word-break:break-all; }
+
+  footer.section{ padding-bottom:60px; }
+  footer .foot-title{ font-family:var(--mono); font-size:13px; color:var(--teal); margin-bottom:8px; }
+  footer p{ font-family:var(--mono); font-size:11.5px; color:var(--muted); max-width:320px; line-height:1.7; }
+
+  .fade-el{ transition:opacity .3s linear; }
+</style>
+</head>
+<body>
+
+<div id="canvas-wrap"></div>
+
+<!-- 0: HERO -->
+<section class="section" id="hero">
+  <div class="caption-bar" style="pointer-events:auto;">
+    <h1>Night <span>Tree</span></h1>
+    <p class="tagline">roots that resolve, fruit that answers</p>
+    <p class="body-text">Scroll to orbit around a living network map. Two separate tools, one tree.</p>
+    <div class="scroll-hint" style="margin-top:8px;"><span class="arrow">↑</span>swipe up to orbit in</div>
+  </div>
+</section>
+
+<!-- 1: ROOTS EXPLAIN — DNS TOOL -->
+<section class="section" id="rootsExplain">
+  <div class="caption-bar" style="pointer-events:auto;">
+    <div class="sec-eyebrow">tool one — dns lookup</div>
+    <h2 class="sec-heading">The roots find the <em>name</em></h2>
+    <p class="body-text">A chain of lookups reaching down through DNS until a real address surfaces.</p>
+    <div class="card" style="border:none; background:transparent; padding:10px 0 0; backdrop-filter:none;">
+      <label>Domain</label>
+      <input id="domainInput" value="google.com">
+      <button class="btn" id="dnsBtn">Look Up DNS Records</button>
+    </div>
+  </div>
+</section>
+
+<!-- 2: ROOTS LIVE -->
+<section class="section" id="rootsLive">
+  <div class="hud fade-el" id="rootsHud"><h2>$ roots --resolve</h2><p>Live DNS records for your domain, glowing beneath the tree. Tap any root to read it.</p></div>
+  <div class="status fade-el" id="rootsStatus">
+    <div class="big" id="domainLabel">—</div>
+    <div class="row"><span>IP address</span><b id="ipLabel">—</b></div>
+    <div class="row"><span>mail servers</span><b id="mxLabel">—</b></div>
+    <div class="row"><span>name servers</span><b id="nsLabel">—</b></div>
+    <div class="row"><span>other records</span><b id="otherLabel">—</b></div>
+  </div>
+  <div class="legend fade-el" id="typeLegend"></div>
+</section>
+
+<!-- 3: TRUNK -->
+<section class="section" id="trunk">
+  <div class="caption-bar">
+    <div class="sec-eyebrow">rising</div>
+    <h2 class="sec-heading">The trunk carries <em>everything</em></h2>
+    <p class="body-text">Every request that reaches the fruit passed through here first.</p>
+  </div>
+</section>
+
+<!-- 4: CANOPY EXPLAIN — PORT SCAN TOOL -->
+<section class="section" id="canopyExplain">
+  <div class="caption-bar" style="pointer-events:auto;">
+    <div class="sec-eyebrow">tool two — port scan</div>
+    <h2 class="sec-heading">The fruit is a <em>port</em></h2>
+    <p class="body-text">Each one hangs at a fixed number. Some let you in.</p>
+    <div class="card" style="border:none; background:transparent; padding:10px 0 0; backdrop-filter:none;">
+      <label>Target IP</label>
+      <input id="ipInput" value="127.0.0.1">
+      <div class="row2">
+        <div><label>Start Port</label><input id="startPort" type="number" value="20" min="1" max="65535"></div>
+        <div><label>End Port</label><input id="endPort" type="number" value="100" min="1" max="65535"></div>
+      </div>
+      <button class="btn" id="growBtn">Grow the Fruit</button>
+    </div>
+  </div>
+</section>
+
+<!-- 5: CANOPY LIVE -->
+<section class="section" id="canopyLive">
+  <div class="hud fade-el" id="canopyHud"><h2>$ canopy --scan</h2><p>Every port is a piece of fruit. Silver means unscanned, cyan means open, deep blue means closed. Open ports fall to the ground.</p><p id="sampledNote" style="color:var(--teal); margin-top:6px;"></p></div>
+  <div class="status fade-el" id="canopyStatus">
+    <div class="big" id="scanCount">0 / 0</div>
+    <div>ports scanned</div>
+    <div class="row"><span>target</span><b id="targetLabel">—</b></div>
+    <div class="row"><span>open</span><b id="openLabel" style="color:var(--open)">0</b></div>
+  </div>
+  <div class="legend fade-el" id="portLegend">
+    <span><i class="dot" style="background:var(--pend); color:var(--pend)"></i>unscanned</span>
+    <span><i class="dot" style="background:var(--open); color:var(--open)"></i>open</span>
+    <span><i class="dot" style="background:var(--closed); color:var(--closed)"></i>closed</span>
+  </div>
+</section>
+
+<!-- 6: FRUIT FOCUS -->
+<section class="section" id="fruitFocus">
+  <div class="caption-bar">
+    <div class="sec-eyebrow">closer still</div>
+    <h2 class="sec-heading">Tap a fruit. <em>Look inside.</em></h2>
+    <p class="body-text">Tap any fruit or glowing root, anywhere — the tree pulls you in close.</p>
+  </div>
+</section>
+
+<!-- 7: RESULTS -->
+<section class="section" id="results">
+  <div class="caption-bar" style="pointer-events:auto; max-height:56vh; overflow-y:auto;">
+    <div class="sec-eyebrow">pulling back</div>
+    <h2 class="sec-heading">What the tree <em>knows</em></h2>
+    <div class="stat-grid">
+      <div class="stat"><div class="num" id="statTotal">0</div><div class="lbl">ports checked</div></div>
+      <div class="stat"><div class="num" id="statOpen" style="color:var(--open)">0</div><div class="lbl">open</div></div>
+    </div>
+    <div class="chip-list"><h3>Open ports</h3><div id="openChips">—</div></div>
+    <div class="chip-list" style="margin-top:18px;"><h3>DNS records</h3><div id="dnsList">—</div></div>
+  </div>
+</section>
+
+<!-- 8: FOOTER -->
+<footer class="section" id="footer">
+  <div class="caption-bar">
+    <div class="foot-title">$ night-tree</div>
+    <p>A cybersecurity portfolio piece — DNS roots are real and live. Port results are simulated, since browsers can't open raw sockets.</p>
+  </div>
+</footer>
+
+<div id="fruitInfo">
+  <div class="port-num" id="fiPort">—</div>
+  <div class="port-name" id="fiName">—</div>
+  <div class="port-status" id="fiStatus">—</div>
+  <div class="port-desc" id="fiDesc"></div>
+  <button id="backBtn">← Back to orbit</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+  // ============ SCENE SETUP ============
+  const wrap = document.getElementById('canvas-wrap');
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x050810, 0.022);
+
+  const camera = new THREE.PerspectiveCamera(52, window.innerWidth / window.innerHeight, 0.1, 1000);
+  const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  wrap.appendChild(renderer.domElement);
+
+  scene.add(new THREE.AmbientLight(0x223355, 1.0));
+  const moon = new THREE.DirectionalLight(0xbcd8ff, 1.0);
+  moon.position.set(10, 18, 6);
+  scene.add(moon);
+  const glowFill = new THREE.PointLight(0x2DD4BF, 0.9, 40);
+  glowFill.position.set(-6, 4, -6);
+  scene.add(glowFill);
+
+  // ground: subtle reflective disc
+  const ground = new THREE.Mesh(
+    new THREE.CircleGeometry(10, 48),
+    new THREE.MeshStandardMaterial({ color:0x0a1220, roughness:0.6, metalness:0.3, transparent:true, opacity:0.55 })
+  );
+  ground.rotation.x = -Math.PI / 2;
+  scene.add(ground);
+  const groundRing = new THREE.Mesh(
+    new THREE.RingGeometry(4.6, 4.75, 64),
+    new THREE.MeshBasicMaterial({ color:0x2DD4BF, side:THREE.DoubleSide, transparent:true, opacity:0.3 })
+  );
+  groundRing.rotation.x = -Math.PI / 2;
+  scene.add(groundRing);
+
+  // starfield
+  const starGeo = new THREE.BufferGeometry();
+  const starCount = 1100;
+  const starPos = new Float32Array(starCount * 3);
+  for(let i=0;i<starCount;i++){
+    starPos[i*3]=(Math.random()-0.5)*140; starPos[i*3+1]=Math.random()*70-10; starPos[i*3+2]=(Math.random()-0.5)*140;
+  }
+  starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+  const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color:0x3b4a63, size:0.09 }));
+  scene.add(stars);
+
+  // fireflies — small drifting glow points around the tree
+  const fireflyCount = 60;
+  const fireflyGeo = new THREE.BufferGeometry();
+  const fireflyPos = new Float32Array(fireflyCount * 3);
+  const fireflyPhase = [];
+  for(let i=0;i<fireflyCount;i++){
+    const a = Math.random()*Math.PI*2, r = 3 + Math.random()*6, y = Math.random()*8 - 1;
+    fireflyPos[i*3]=Math.cos(a)*r; fireflyPos[i*3+1]=y; fireflyPos[i*3+2]=Math.sin(a)*r;
+    fireflyPhase.push(Math.random()*Math.PI*2);
+  }
+  fireflyGeo.setAttribute('position', new THREE.BufferAttribute(fireflyPos, 3));
+  const fireflies = new THREE.Points(fireflyGeo, new THREE.PointsMaterial({ color:0x7dd3fc, size:0.14, transparent:true, opacity:0.85 }));
+  scene.add(fireflies);
+
+  // ============ TREE ============
+  const treeGroup = new THREE.Group();
+  scene.add(treeGroup);
+
+  const trunkHeight = 3.1;
+
+  function squashPoint(p, originY, flattenY, widenXZ){
+    return new THREE.Vector3(p.x * widenXZ, originY + (p.y - originY) * flattenY, p.z * widenXZ);
+  }
+
+  // -- cone-sampling helper: rotate a direction by polar/azimuth angles --
+  function rotateDirection(dir, polarAngle, azimuthAngle){
+    const arbitrary = Math.abs(dir.y) < 0.99 ? new THREE.Vector3(0,1,0) : new THREE.Vector3(1,0,0);
+    const perp1 = new THREE.Vector3().crossVectors(dir, arbitrary).normalize();
+    const perp2 = new THREE.Vector3().crossVectors(dir, perp1).normalize();
+    return dir.clone().multiplyScalar(Math.cos(polarAngle))
+      .add(perp1.multiplyScalar(Math.sin(polarAngle) * Math.cos(azimuthAngle)))
+      .add(perp2.multiplyScalar(Math.sin(polarAngle) * Math.sin(azimuthAngle)))
+      .normalize();
+  }
+
+  // -- recursive branch skeleton: returns {segments, tips, joints} --
+  // thick upper-level branches get a gentle organic bend + joint sphere;
+  // thin twigs stay single straight segments to keep mesh count sane
+  function generateSkeleton(origin, initialDir, initialLen, initialRadius, depth, branchFactor, spreadDeg, lenFalloff, radiusFalloff){
+    const segments = [], tips = [], joints = [];
+    function recurse(start, dir, len, radius, d){
+      const bendEligible = d >= depth - 1; // only the first couple of levels bend
+      let end, endDir;
+
+      if(bendEligible){
+        const bendAngle = THREE.MathUtils.degToRad(5 + Math.random()*12);
+        const bendAzimuth = Math.random() * Math.PI * 2;
+        const midDir = rotateDirection(dir, bendAngle, bendAzimuth);
+        const mid = start.clone().add(midDir.clone().multiplyScalar(len * 0.52));
+        endDir = rotateDirection(midDir, bendAngle * 0.5, bendAzimuth + 1.3 + Math.random());
+        end = mid.clone().add(endDir.clone().multiplyScalar(len * 0.48));
+        segments.push({ start, end:mid, radius });
+        segments.push({ start:mid, end, radius: radius * 0.93 });
+        joints.push({ pos:mid, radius: radius * 0.95 });
+      } else {
+        end = start.clone().add(dir.clone().multiplyScalar(len));
+        endDir = dir;
+        segments.push({ start, end, radius });
+      }
+
+      if(d <= 0){ tips.push({ pos:end, dir:endDir }); return; }
+
+      // irregular branch count — not every node forks the same way
+      let children = branchFactor;
+      const roll = Math.random();
+      if(roll < 0.12) children = 1;
+      else if(roll < 0.32) children = Math.max(1, branchFactor - 1);
+      else if(roll < 0.48) children = branchFactor + 1;
+
+      for(let c = 0; c < children; c++){
+        const azimuth = (c / children) * Math.PI * 2 + Math.random() * 1.1;
+        const polar = THREE.MathUtils.degToRad(spreadDeg * (0.5 + Math.random() * 0.8));
+        const newDir = rotateDirection(endDir, polar, azimuth);
+        recurse(end, newDir, len * lenFalloff * (0.82 + Math.random()*0.36), radius * radiusFalloff * (0.88 + Math.random()*0.24), d - 1);
+      }
+    }
+    recurse(origin, initialDir, initialLen, initialRadius, depth);
+    return { segments, tips, joints };
+  }
+
+  function makeBranchMesh(seg, material){
+    const dir = new THREE.Vector3().subVectors(seg.end, seg.start);
+    const length = dir.length();
+    if(length < 0.001) return null;
+    const geo = new THREE.CylinderGeometry(Math.max(0.02, seg.radius * 0.62), Math.max(0.03, seg.radius), length, 6, 1);
+    const mesh = new THREE.Mesh(geo, material);
+    const mid = seg.start.clone().add(seg.end).multiplyScalar(0.5);
+    mesh.position.copy(mid);
+    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir.normalize());
+    return mesh;
+  }
+
+  const barkColors = [0x1e293b, 0x223349, 0x1a2436, 0x25344a];
+  const barkMats = barkColors.map(c => new THREE.MeshStandardMaterial({ color:c, roughness:0.8, metalness:0.2, emissive:0x0f2436, emissiveIntensity:0.15 }));
+  function randomBarkMat(){ return barkMats[Math.floor(Math.random()*barkMats.length)]; }
+  const rootMat = new THREE.MeshStandardMaterial({ color:0x162032, roughness:0.85, metalness:0.15, emissive:0x0a1420, emissiveIntensity:0.1 });
+
+  // trunk as its own thick cylinder for a solid base, with a slight natural lean
+  const trunkMesh = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.3, 0.58, trunkHeight, 10),
+    barkMats[0]
+  );
+  trunkMesh.position.y = trunkHeight / 2;
+  trunkMesh.rotation.z = 0.045;
+  trunkMesh.rotation.x = -0.025;
+  treeGroup.add(trunkMesh);
+
+  // flared buttress roots at the base, visible above ground like the reference photo
+  const buttressCount = 6;
+  for(let i = 0; i < buttressCount; i++){
+    const angle = (i / buttressCount) * Math.PI * 2 + Math.random()*0.4;
+    const outX = Math.cos(angle) * 0.55, outZ = Math.sin(angle) * 0.55;
+    const start = new THREE.Vector3(0, 0.75, 0);
+    const end = new THREE.Vector3(outX, 0.02, outZ);
+    const m = makeBranchMesh({ start, end, radius: 0.16 }, barkMats[0]);
+    if(m) treeGroup.add(m);
+  }
+
+  // canopy skeleton grows from trunk top — rounder, fuller dome like the reference photo
+  const rawCanopySkeleton = generateSkeleton(
+    new THREE.Vector3(0.08, trunkHeight, -0.03), new THREE.Vector3(0.03,1,-0.01).normalize(),
+    1.2, 0.24, 4, 4, 38, 0.75, 0.68
+  );
+  // gentle squash — round and full rather than flat and wide
+  const canopySkeleton = {
+    segments: rawCanopySkeleton.segments.map(seg => ({
+      start: squashPoint(seg.start, trunkHeight, 0.85, 1.15),
+      end: squashPoint(seg.end, trunkHeight, 0.85, 1.15),
+      radius: seg.radius
+    })),
+    tips: rawCanopySkeleton.tips.map(t => ({ pos: squashPoint(t.pos, trunkHeight, 0.85, 1.15), dir:t.dir })),
+    joints: rawCanopySkeleton.joints.map(j => ({ pos: squashPoint(j.pos, trunkHeight, 0.85, 1.15), radius:j.radius }))
+  };
+  const canopyBranchMeshes = [];
+  canopySkeleton.segments.forEach(seg => {
+    const m = makeBranchMesh(seg, randomBarkMat());
+    if(m){ treeGroup.add(m); canopyBranchMeshes.push(m); }
+  });
+  // joint spheres smooth the seams where bent branch segments meet
+  canopySkeleton.joints.forEach(j => {
+    const joint = new THREE.Mesh(new THREE.SphereGeometry(j.radius, 7, 6), randomBarkMat());
+    joint.position.copy(j.pos);
+    treeGroup.add(joint);
+  });
+  let canopyTips = canopySkeleton.tips;
+
+  // extra short bare twigs off every tip for gnarled fullness (no leaves)
+  canopyTips.forEach(tip => {
+    const twigCount = 2 + Math.floor(Math.random()*2);
+    for(let i = 0; i < twigCount; i++){
+      const azimuth = Math.random() * Math.PI * 2;
+      const polar = THREE.MathUtils.degToRad(30 + Math.random()*40);
+      const twigDir = rotateDirection(tip.dir, polar, azimuth);
+      const twigLen = 0.22 + Math.random()*0.2;
+      const twigEnd = tip.pos.clone().add(twigDir.clone().multiplyScalar(twigLen));
+      const m = makeBranchMesh({ start:tip.pos, end:twigEnd, radius:0.03 }, randomBarkMat());
+      if(m) treeGroup.add(m);
+    }
+  });
+
+  const canopyCenterY = canopyTips.reduce((s,t) => s + t.pos.y, 0) / Math.max(1, canopyTips.length);
+  const canopyAvgY = trunkHeight + 2.3;
+
+  // leaves — clustered around branch tips, kept sparse enough that the
+  // branch structure underneath still reads clearly
+  function buildLeaves(){
+    const leafGeo = new THREE.BufferGeometry();
+    const count = 4200;
+    const pos = new Float32Array(count * 3);
+    const col = new Float32Array(count * 3);
+    for(let i = 0; i < count; i++){
+      const tip = canopyTips[Math.floor(Math.random() * canopyTips.length)];
+      const jitter = 0.52;
+      const x = tip.pos.x + (Math.random()-0.5) * jitter * 2;
+      const y = tip.pos.y + (Math.random()-0.5) * jitter * 1.3 + 0.08;
+      const z = tip.pos.z + (Math.random()-0.5) * jitter * 2;
+      pos[i*3]=x; pos[i*3+1]=y; pos[i*3+2]=z;
+      const isTeal = Math.random() > 0.35;
+      if(isTeal){ col[i*3]=0.09; col[i*3+1]=0.33+Math.random()*0.17; col[i*3+2]=0.30+Math.random()*0.13; }
+      else{ col[i*3]=0.13; col[i*3+1]=0.19; col[i*3+2]=0.29+Math.random()*0.17; }
+    }
+    leafGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    leafGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    const leaves = new THREE.Points(leafGeo, new THREE.PointsMaterial({ size:0.34, vertexColors:true, transparent:true, opacity:0.82, sizeAttenuation:true }));
+    treeGroup.add(leaves);
+    return leaves;
+  }
+  const leafCloud = buildLeaves();
+
+  // root skeleton grows downward from trunk base
+  const rootSkeleton = generateSkeleton(
+    new THREE.Vector3(0.05, 0.05, -0.02), new THREE.Vector3(0.02,-1,-0.01).normalize(),
+    0.95, 0.16, 3, 3, 42, 0.72, 0.66
+  );
+  rootSkeleton.segments.forEach(seg => {
+    const m = makeBranchMesh(seg, rootMat);
+    if(m) treeGroup.add(m);
+  });
+  rootSkeleton.joints.forEach(j => {
+    const joint = new THREE.Mesh(new THREE.SphereGeometry(j.radius, 6, 6), rootMat);
+    joint.position.copy(j.pos);
+    treeGroup.add(joint);
+  });
+  let rootTips = rootSkeleton.tips;
+  const rootAvgY = rootTips.reduce((s,t) => s + t.pos.y, 0) / Math.max(1, rootTips.length);
+
+  const portNames = { 21:'FTP',22:'SSH',23:'TELNET',25:'SMTP',53:'DNS',80:'HTTP',110:'POP3',143:'IMAP',443:'HTTPS',445:'SMB',587:'SMTP-S',993:'IMAPS',995:'POP3S',1433:'MSSQL',1521:'ORACLE',3000:'DEV',3306:'MySQL',3389:'RDP',5432:'PGSQL',5900:'VNC',6379:'REDIS',8000:'HTTP-ALT',8080:'HTTP-PROXY',8443:'HTTPS-ALT' };
+  const portDescriptions = {
+    21:'File Transfer Protocol — uploads and downloads files.', 22:'Secure Shell — encrypted remote login and command execution.',
+    23:'Telnet — unencrypted remote login, considered insecure today.', 25:'Simple Mail Transfer Protocol — sends email between servers.',
+    53:'Domain Name System — translates domain names to IP addresses.', 80:'Hypertext Transfer Protocol — standard unencrypted web traffic.',
+    110:'Post Office Protocol v3 — retrieves email from a mail server.', 143:'Internet Message Access Protocol — syncs email across devices.',
+    443:'HTTPS — encrypted web traffic, secured with TLS/SSL.', 445:'Server Message Block — Windows file and printer sharing.',
+    587:'SMTP Submission — the port modern clients use to send outgoing mail.', 993:'IMAP over SSL — encrypted email sync.',
+    995:'POP3 over SSL — encrypted email retrieval.', 1433:'Microsoft SQL Server — default database listener port.',
+    1521:'Oracle Database — default listener port.', 3000:'Common local development server port.',
+    3306:'MySQL — default database listener port.', 3389:'Remote Desktop Protocol — Windows remote access.',
+    5432:'PostgreSQL — default database listener port.', 5900:'VNC — remote desktop screen sharing.',
+    6379:'Redis — default in-memory data store port.', 8000:'Alternate HTTP port, often used for local dev servers.',
+    8080:'Common alternate HTTP port, often used by proxies.', 8443:'Common alternate HTTPS port.'
+  };
+  const commonPorts = new Set([21,22,80,443,3306,8080]);
+  function seededOpen(target, port){
+    let seed = 0;
+    for(const ch of (target + ':' + port)) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+    if(commonPorts.has(port)) return (seed % 10) < 7;
+    return (seed % 10) < 1;
+  }
+
+  const MAX_FRUIT = 240;
+  let fruits = []; // { mesh, hitMesh, port, state }
+  let fruitPortList = [];
+
+  function clearFruit(){
+    fruits.forEach(f => { treeGroup.remove(f.mesh); treeGroup.remove(f.hitMesh); });
+    fruits = [];
+  }
+
+  function buildFruits(start, end){
+    clearFruit();
+    let list = [];
+    const span = end - start + 1;
+    if(span <= MAX_FRUIT){ for(let p = start; p <= end; p++) list.push(p); }
+    else{ for(let i = 0; i < MAX_FRUIT; i++) list.push(start + Math.round((span - 1) * i / (MAX_FRUIT - 1))); }
+    fruitPortList = list;
+
+    const N = list.length;
+    const tipCount = canopyTips.length;
+
+    list.forEach((port, i) => {
+      const tip = canopyTips[i % tipCount];
+      const clusterIndex = Math.floor(i / tipCount);
+      const jitterAngle = clusterIndex * 2.4 + i * 0.7;
+      const jitterR = 0.1 + clusterIndex * 0.13;
+      const fruitPos = tip.pos.clone().add(new THREE.Vector3(
+        Math.cos(jitterAngle) * jitterR,
+        Math.sin(jitterAngle * 1.3) * jitterR * 0.6 - 0.08,
+        Math.sin(jitterAngle) * jitterR
+      ));
+
+      const visRadius = N > 150 ? 0.11 : 0.16;
+      const mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(visRadius, 12, 12),
+        new THREE.MeshStandardMaterial({ color:0xA5F3FC, emissive:0xA5F3FC, emissiveIntensity:0.5, roughness:0.35, metalness:0.15 })
+      );
+      mesh.position.copy(fruitPos);
+      treeGroup.add(mesh);
+
+      // larger invisible sphere for reliable touch targeting
+      const hitMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(visRadius * 2.6, 8, 8),
+        new THREE.MeshBasicMaterial({ visible:false })
+      );
+      hitMesh.position.copy(fruitPos);
+      treeGroup.add(hitMesh);
+
+      fruits.push({ mesh, hitMesh, port, state:'pending', falling:false, landed:false, velocity:new THREE.Vector3() });
+    });
+
+    return list;
+  }
+  buildFruits(20, 100);
+
+  // ============ ROOTS (DNS) ============
+  const recordTypes = [
+    { type:'A',   hex:'#2DD4BF', three:0x2DD4BF, label:'A · IPv4' },
+    { type:'MX',  hex:'#3B82F6', three:0x3B82F6, label:'MX · Mail' },
+    { type:'NS',  hex:'#94A3B8', three:0x94A3B8, label:'NS · Name Server' },
+    { type:'TXT', hex:'#818CF8', three:0x818CF8, label:'TXT · Text' },
+  ];
+  const legendWrap = document.getElementById('typeLegend');
+  recordTypes.forEach(rt => {
+    const span = document.createElement('span');
+    span.innerHTML = `<i class="dot" style="background:${rt.hex}; color:${rt.hex}"></i>${rt.type}`;
+    legendWrap.appendChild(span);
+  });
+
+  const recordDescriptions = {
+    A:'Points a domain to an IPv4 address — the core mapping of name to machine.',
+    MX:'Directs where email for this domain should be delivered.',
+    NS:'Names the authoritative servers that answer for this domain.',
+    TXT:'Free-form text — often used for verification or security policies.'
+  };
+
+  let rootNodes = []; // { mesh, hitMesh, type, value, hex }
+  function clearRoots(){
+    rootNodes.forEach(r => { treeGroup.remove(r.mesh); treeGroup.remove(r.hitMesh); });
+    rootNodes = [];
+  }
+  function buildRoots(results){
+    clearRoots();
+    const typesWithData = recordTypes.filter(rt => (results[rt.type] || []).length > 0);
+    let tipCursor = 0;
+    typesWithData.forEach(rt => {
+      const values = (results[rt.type] || []).slice(0, 5);
+      values.forEach(val => {
+        const tip = rootTips[tipCursor % rootTips.length];
+        tipCursor++;
+        const nodePos = tip.pos.clone().add(new THREE.Vector3((Math.random()-0.5)*0.15, -0.08, (Math.random()-0.5)*0.15));
+
+        const mesh = new THREE.Mesh(
+          new THREE.SphereGeometry(0.14, 12, 12),
+          new THREE.MeshStandardMaterial({ color:rt.three, emissive:rt.three, emissiveIntensity:0.6, roughness:0.4 })
+        );
+        mesh.position.copy(nodePos);
+        treeGroup.add(mesh);
+
+        const hitMesh = new THREE.Mesh(new THREE.SphereGeometry(0.36, 8, 8), new THREE.MeshBasicMaterial({ visible:false }));
+        hitMesh.position.copy(nodePos);
+        treeGroup.add(hitMesh);
+
+        rootNodes.push({ mesh, hitMesh, type:rt.type, value:val, hex:rt.hex });
+      });
+    });
+  }
+
+  async function queryType(domain, type){
+    try{
+      const res = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=${type}`, { headers:{ 'Accept':'application/dns-json' } });
+      if(!res.ok) return [];
+      const data = await res.json();
+      return (data.Answer || []).map(a => a.data);
+    } catch(e){ return null; }
+  }
+  async function resolveAll(domain, types){
+    const out = {}; let networkError = false;
+    await Promise.all(types.map(async type => {
+      const vals = await queryType(domain, type);
+      if(vals === null) networkError = true;
+      out[type] = vals || [];
+    }));
+    return { out, networkError };
+  }
+
+  let dnsResultsCache = {};
+  async function runDnsRoots(){
+    const domain = document.getElementById('domainInput').value.trim();
+    if(!domain) return;
+    document.getElementById('domainLabel').textContent = domain;
+    document.getElementById('ipLabel').textContent = 'resolving...';
+    const { out, networkError } = await resolveAll(domain, recordTypes.map(r => r.type));
+    dnsResultsCache = out;
+    buildRoots(out);
+
+    if(networkError){
+      document.getElementById('ipLabel').textContent = 'network blocked';
+      document.getElementById('mxLabel').textContent = '—';
+      document.getElementById('nsLabel').textContent = '—';
+      document.getElementById('otherLabel').textContent = '—';
+      const list = document.getElementById('dnsList');
+      list.innerHTML = '<span style="color:#e5484d; font-family:var(--mono); font-size:11.5px;">Lookup failed — if you opened this file directly on your phone, host it online (e.g. GitHub Pages) instead; local files can\'t reach external DNS APIs.</span>';
+      return;
+    }
+
+    document.getElementById('ipLabel').textContent = (out.A && out.A.length) ? out.A.join(', ') : 'not found';
+    document.getElementById('mxLabel').textContent = (out.MX && out.MX.length) ? out.MX.join(', ') : 'none';
+    document.getElementById('nsLabel').textContent = (out.NS && out.NS.length) ? out.NS.join(', ') : 'none';
+    document.getElementById('otherLabel').textContent = (out.TXT && out.TXT.length) ? `${out.TXT.length} TXT record(s)` : 'none';
+
+    renderDnsSummary(out, domain);
+  }
+
+  function renderDnsSummary(results, domain){
+    const list = document.getElementById('dnsList');
+    list.innerHTML = '';
+    const domainRow = document.createElement('div');
+    domainRow.className = 'rec-row';
+    domainRow.innerHTML = `<div class="rt" style="color:var(--paper)">Domain</div><div class="rv">${domain}</div>`;
+    list.appendChild(domainRow);
+
+    const labels = { A:'IP Address', MX:'Mail Servers', NS:'Name Servers', TXT:'Other Records (TXT)' };
+    recordTypes.forEach(rt => {
+      const vals = results[rt.type] || [];
+      const row = document.createElement('div');
+      row.className = 'rec-row';
+      const valHtml = vals.length ? vals.map(v => `<div>${v}</div>`).join('') : '<div style="color:var(--muted)">none found</div>';
+      row.innerHTML = `<div class="rt" style="color:${rt.hex}">${labels[rt.type] || rt.label}</div>${valHtml}`;
+      list.appendChild(row);
+    });
+  }
+
+  // ============ PORT SCAN ============
+  let scanTimers = [], scannedCount = 0, openCount = 0;
+  function resetScanVisuals(){
+    scanTimers.forEach(t => clearTimeout(t));
+    scanTimers = [];
+    scannedCount = 0; openCount = 0;
+    fruits.forEach(f => {
+      f.state = 'pending';
+      f.mesh.material.color.set(0xA5F3FC);
+      f.mesh.material.emissive.set(0xA5F3FC);
+      f.mesh.scale.set(1,1,1);
+    });
+    document.getElementById('scanCount').textContent = `0 / ${fruits.length}`;
+    document.getElementById('openLabel').textContent = '0';
+  }
+
+  function runPortScan(){
+    let ip = document.getElementById('ipInput').value.trim() || '127.0.0.1';
+    let start = parseInt(document.getElementById('startPort').value) || 1;
+    let end = parseInt(document.getElementById('endPort').value) || 100;
+    start = Math.max(1, Math.min(65535, start));
+    end = Math.max(start, Math.min(65535, end));
+    const requestedSpan = end - start + 1;
+    buildFruits(start, end);
+    resetScanVisuals();
+    document.getElementById('targetLabel').textContent = ip;
+    const sampledNote = document.getElementById('sampledNote');
+    if(sampledNote){
+      sampledNote.textContent = requestedSpan > MAX_FRUIT
+        ? `showing ${MAX_FRUIT} of ${requestedSpan} ports, evenly sampled (phone-friendly limit)`
+        : '';
+    }
+
+    const gap = fruits.length > 150 ? 18 : (fruits.length > 60 ? 40 : 85);
+    fruits.forEach((f, i) => {
+      const t = setTimeout(() => {
+        const isOpen = seededOpen(ip, f.port);
+        f.state = isOpen ? 'open' : 'closed';
+        const color = isOpen ? 0x22D3EE : 0x1E3A5F;
+        f.mesh.material.color.set(color);
+        f.mesh.material.emissive.set(color);
+        f.mesh.material.emissiveIntensity = isOpen ? 0.9 : 0.3;
+        f.mesh.scale.set(1.7,1.7,1.7);
+        if(isOpen){
+          f.falling = true;
+          f.velocity.set((Math.random()-0.5)*1.1, 0.4, (Math.random()-0.5)*1.1);
+        }
+        scannedCount++;
+        if(isOpen) openCount++;
+        document.getElementById('scanCount').textContent = `${scannedCount} / ${fruits.length}`;
+        document.getElementById('openLabel').textContent = String(openCount);
+        if(scannedCount === fruits.length) reportResults();
+      }, i * gap);
+      scanTimers.push(t);
+    });
+  }
+
+  function reportResults(){
+    document.getElementById('statTotal').textContent = fruits.length;
+    document.getElementById('statOpen').textContent = openCount;
+    const openFruits = fruits.filter(f => f.state === 'open');
+    const chipsEl = document.getElementById('openChips');
+    chipsEl.innerHTML = openFruits.length
+      ? openFruits.map(f => `<span class="chip">${f.port}${portNames[f.port] ? ' · '+portNames[f.port] : ''}</span>`).join('')
+      : '<span style="color:var(--muted); font-family:var(--mono); font-size:12px;">none found</span>';
+  }
+
+  document.getElementById('dnsBtn').addEventListener('click', () => {
+    document.getElementById('rootsLive').scrollIntoView({ behavior:'smooth' });
+    setTimeout(runDnsRoots, 500);
+  });
+  document.getElementById('growBtn').addEventListener('click', () => {
+    document.getElementById('canopyLive').scrollIntoView({ behavior:'smooth' });
+    setTimeout(runPortScan, 500);
+  });
+
+  // ============ TAP TO INSPECT ============
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  let manualZoom = false, scrollAtSelection = 0;
+  let manualTargetPos = null, manualTargetLook = null;
+  let dragged = false, downX = 0, downY = 0;
+
+  renderer.domElement.addEventListener('pointerdown', e => { downX = e.clientX; downY = e.clientY; dragged = false; });
+  renderer.domElement.addEventListener('pointermove', e => {
+    if(Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) > 4) dragged = true;
+  });
+  renderer.domElement.addEventListener('pointerup', e => {
+    if(dragged) return;
+    pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+    pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    const allMeshes = fruits.map(f => f.hitMesh).concat(rootNodes.map(r => r.hitMesh));
+    const hits = raycaster.intersectObjects(allMeshes);
+    if(hits.length === 0) return;
+    const hitMesh = hits[0].object;
+    const f = fruits.find(ff => ff.hitMesh === hitMesh);
+    if(f) selectFruit(f);
+    else {
+      const r = rootNodes.find(rr => rr.hitMesh === hitMesh);
+      if(r) selectRoot(r);
+    }
+  });
+
+  function worldPosOf(mesh){
+    const p = mesh.position.clone();
+    p.applyMatrix4(treeGroup.matrixWorld);
+    return p;
+  }
+
+  function selectFruit(f){
+    manualZoom = true;
+    scrollAtSelection = scrollProgress;
+    const worldPos = worldPosOf(f.mesh);
+    const dir = worldPos.clone().sub(new THREE.Vector3(0, canopyCenterY, 0)).normalize();
+    manualTargetPos = worldPos.clone().add(dir.multiplyScalar(1.5)).add(new THREE.Vector3(0,0.1,0));
+    manualTargetLook = worldPos.clone();
+
+    document.getElementById('fiPort').textContent = f.port;
+    document.getElementById('fiPort').style.color = 'var(--paper)';
+    document.getElementById('fiName').textContent = portNames[f.port] || 'unregistered port';
+    document.getElementById('fiDesc').textContent = portDescriptions[f.port] || 'No well-known service registered on this port.';
+    const statusEl = document.getElementById('fiStatus');
+    if(f.state === 'open'){ statusEl.textContent = 'OPEN'; statusEl.style.color = 'var(--open)'; }
+    else if(f.state === 'closed'){ statusEl.textContent = 'CLOSED'; statusEl.style.color = 'var(--closed)'; }
+    else{ statusEl.textContent = 'NOT YET SCANNED'; statusEl.style.color = 'var(--pend)'; }
+    document.getElementById('fruitInfo').classList.add('show');
+  }
+
+  function selectRoot(r){
+    manualZoom = true;
+    scrollAtSelection = scrollProgress;
+    const worldPos = worldPosOf(r.mesh);
+    const dir = worldPos.clone().normalize();
+    manualTargetPos = worldPos.clone().add(dir.multiplyScalar(1.3)).add(new THREE.Vector3(0,0.1,0));
+    manualTargetLook = worldPos.clone();
+
+    document.getElementById('fiPort').textContent = r.type;
+    document.getElementById('fiPort').style.color = r.hex;
+    document.getElementById('fiName').textContent = r.value;
+    document.getElementById('fiDesc').textContent = recordDescriptions[r.type] || '';
+    const statusEl = document.getElementById('fiStatus');
+    statusEl.textContent = 'DNS RECORD';
+    statusEl.style.color = r.hex;
+    document.getElementById('fruitInfo').classList.add('show');
+  }
+
+  function exitManualZoom(){
+    manualZoom = false;
+    document.getElementById('fruitInfo').classList.remove('show');
+  }
+  document.getElementById('backBtn').addEventListener('click', exitManualZoom);
+
+  // ============ SCROLL-DRIVEN ORBIT CAMERA ============
+  // waypoints per chapter: [radius, camY, lookY] — kept close together so the
+  // dominant motion is a walk-around orbit, not a vertical dive
+  const midY = canopyCenterY * 0.55;
+  const waypoints = [
+    { r:11, y:midY,        look:canopyCenterY*0.4 },  // 0 hero
+    { r:10, y:midY,        look:canopyCenterY*0.35 }, // 1 rootsExplain
+    { r:8,  y:midY - 0.6,  look:rootAvgY*0.5 },        // 2 rootsLive — slight dip to glimpse roots
+    { r:7,  y:midY,        look:trunkHeight*0.5 },     // 3 trunk
+    { r:8,  y:midY + 0.5,  look:canopyCenterY*0.75 },  // 4 canopyExplain
+    { r:7,  y:midY + 1.0,  look:canopyCenterY },        // 5 canopyLive — slight rise toward canopy
+    { r:4.5,y:midY + 0.9,  look:canopyCenterY },        // 6 fruitFocus — close pass
+    { r:11, y:midY + 0.3,  look:canopyCenterY*0.55 },  // 7 results
+    { r:15, y:midY,        look:canopyCenterY*0.45 },  // 8 footer
+  ];
+  const TOTAL_TURNS = 1.15; // just over one full revolution — see every side once, cleanly
+
+  function getScrollProgress(){
+    const max = document.body.scrollHeight - window.innerHeight;
+    return max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0;
+  }
+  let scrollProgress = 0;
+  window.addEventListener('scroll', () => { scrollProgress = getScrollProgress(); }, { passive:true });
+
+  let dnsAutoLaunched = false, scanAutoLaunched = false;
+  window.addEventListener('scroll', () => {
+    if(scrollProgress > 0.20 && scrollProgress < 0.34 && !dnsAutoLaunched){ dnsAutoLaunched = true; runDnsRoots(); }
+    if(scrollProgress < 0.16) dnsAutoLaunched = false;
+    if(scrollProgress > 0.54 && scrollProgress < 0.68 && !scanAutoLaunched){ scanAutoLaunched = true; runPortScan(); }
+    if(scrollProgress < 0.50) scanAutoLaunched = false;
+
+    if(manualZoom && Math.abs(scrollProgress - scrollAtSelection) > 0.035) exitManualZoom();
+  }, { passive:true });
+
+  const rootsHudEls = [document.getElementById('rootsHud'), document.getElementById('rootsStatus')];
+  const canopyHudEls = [document.getElementById('canopyHud'), document.getElementById('canopyStatus'), document.getElementById('portLegend')];
+  const typeLegendEl = document.getElementById('typeLegend');
+
+  // ============ ANIMATION LOOP ============
+  const camLook = new THREE.Vector3(0, canopyCenterY * 0.5, 0);
+  const clock = new THREE.Clock();
+  function animate(){
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.05);
+
+    const segCount = waypoints.length - 1;
+    const pos = scrollProgress * segCount;
+    const segIndex = Math.min(segCount - 1, Math.floor(pos));
+    const localT = pos - segIndex;
+    const a = waypoints[segIndex], b = waypoints[segIndex + 1];
+    const eased = localT * localT * (3 - 2 * localT);
+    const radius = a.r + (b.r - a.r) * eased;
+    const camY = a.y + (b.y - a.y) * eased;
+    const lookY = a.look + (b.look - a.look) * eased;
+    const theta = scrollProgress * TOTAL_TURNS * Math.PI * 2;
+
+    const orbitPos = new THREE.Vector3(Math.cos(theta) * radius, camY, Math.sin(theta) * radius);
+    const orbitLook = new THREE.Vector3(0, lookY, 0);
+
+    if(manualZoom && manualTargetPos){
+      camera.position.lerp(manualTargetPos, 0.07);
+      camLook.lerp(manualTargetLook, 0.07);
+    } else {
+      camera.position.lerp(orbitPos, 0.06);
+      camLook.lerp(orbitLook, 0.06);
+    }
+    camera.lookAt(camLook);
+
+    const rootsShow = scrollProgress > 0.16 && scrollProgress < 0.36;
+    rootsHudEls.forEach(el => el.style.opacity = rootsShow ? 1 : 0);
+    typeLegendEl.style.opacity = rootsShow ? 1 : 0;
+    const canopyShow = scrollProgress > 0.50 && scrollProgress < 0.70;
+    canopyHudEls.forEach(el => el.style.opacity = canopyShow ? 1 : 0);
+
+    treeGroup.rotation.y += dt * 0.02;
+    stars.rotation.y += dt * 0.003;
+
+    const t = clock.elapsedTime;
+    const fPos = fireflyGeo.attributes.position;
+    for(let i = 0; i < fireflyCount; i++){
+      fPos.array[i*3+1] += Math.sin(t * 0.6 + fireflyPhase[i]) * 0.002;
+    }
+    fPos.needsUpdate = true;
+
+    fruits.forEach(f => {
+      f.mesh.scale.x += (1 - f.mesh.scale.x) * 0.08;
+      f.mesh.scale.y += (1 - f.mesh.scale.y) * 0.08;
+      f.mesh.scale.z += (1 - f.mesh.scale.z) * 0.08;
+
+      if(f.falling){
+        f.velocity.y -= dt * 4.2; // gravity
+        f.mesh.position.addScaledVector(f.velocity, dt);
+        if(f.mesh.position.y <= 0.08){
+          f.mesh.position.y = 0.08;
+          f.falling = false;
+          f.landed = true;
+        }
+        f.hitMesh.position.copy(f.mesh.position);
+      }
+    });
+
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+</script>
+</body>
+</html>
