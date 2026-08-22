@@ -6,7 +6,7 @@ A network toolkit with two parts: a Python CLI for real TCP port scanning and DN
 
 Enable GitHub Pages on this repo (see below) to get a live link, then visit:
 
-`https://bharu-cyber.github.io/Network-Port-Scanner-DNS-Tool-/`
+[Click here to visit the live Night Tree](https://bharu-cyber.github.io/Network-Port-Scanner-DNS-Tool-/)
 
 ## What it does
 
